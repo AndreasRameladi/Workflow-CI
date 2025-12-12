@@ -29,43 +29,46 @@ jobs:
           conda env update -f MLProject/conda.yaml
           
       # 2. Run MLflow Project and Extract IDs (Solusi Ekstraksi Definitif)
+      - # 2. Run MLflow Project and Extract IDs (FIXED)
       - name: Run MLflow Project and Extract IDs
         shell: bash
         id: run_ml
         run: |
           echo "Starting MLflow training and ID extraction..."
           
-          # 2a. Jalankan MLflow Run dan simpan semua output-nya
-          MLFLOW_OUTPUT=$(conda run -n mlflow-ci-env mlflow run ./MLProject --experiment-name "CI_Training_Run" --run-name "GH_Actions_Run_$(date +%Y%m%d%H%M%S)")
+          # 2a. Jalankan MLflow Run
+          # PERBAIKAN: Tambahkan '2>&1' di akhir untuk menangkap stderr (log) ke dalam variabel
+          MLFLOW_OUTPUT=$(conda run -n mlflow-ci-env mlflow run ./MLProject --experiment-name "CI_Training_Run" --run-name "GH_Actions_Run_$(date +%Y%m%d%H%M%S)" 2>&1)
           
-          # Tampilkan output lengkap MLflow (berguna untuk debugging)
-          echo "--- MLFLOW OUTPUT ---"
+          # Tampilkan output lengkap untuk debugging
+          echo "--- MLFLOW OUTPUT START ---"
           echo "$MLFLOW_OUTPUT"
-          echo "---------------------"
+          echo "--- MLFLOW OUTPUT END ---"
           
           # 2b. Ekstraksi RUN_ID
-          # Mengambil RUN ID yang tertera di baris '=== Run (ID '...') succeeded ==='
-          # awk -F "'" memisahkan string berdasarkan tanda kutip tunggal
-          RUN_ID=$(echo "$MLFLOW_OUTPUT" | grep 'succeeded' | awk -F "'" '{print $2}' | head -n 1)
+          # PERBAIKAN: Tambahkan '|| true' agar jika grep gagal, script tidak langsung stop (exit code 1)
+          RUN_ID=$(echo "$MLFLOW_OUTPUT" | grep 'succeeded' | awk -F "'" '{print $2}' | head -n 1 || true)
           
-          # 2c. Ekstraksi Experiment ID (Jika 'CI_Training_Run' baru dibuat)
-          # Mengambil angka terakhir di baris 'Creating a new experiment <ID>'
-          EXP_ID=$(echo "$MLFLOW_OUTPUT" | grep 'Creating a new experiment' | awk '{print $NF}' | tr -d '[:punct:]')
+          # 2c. Ekstraksi Experiment ID
+          # PERBAIKAN: Tambahkan '|| true'
+          EXP_ID=$(echo "$MLFLOW_OUTPUT" | grep 'Creating a new experiment' | awk '{print $NF}' | tr -d '[:punct:]' || true)
           
-          # Jika EXP_ID tidak ditemukan di output (berarti Experiment sudah ada), gunakan ID default (0)
+          # Fallback jika EXP_ID kosong (artinya experiment sudah ada sebelumnya)
           if [ -z "$EXP_ID" ]; then
+            echo "Experiment ID not found in logs (Experiment likely already exists). Defaulting to '0'."
             EXP_ID="0"
           fi
           
+          # Validasi RUN_ID
           if [ -z "$RUN_ID" ]; then
-            echo "FATAL: Could not extract RUN ID after successful training."
+            echo "FATAL: Could not extract RUN ID. Please check the MLFLOW OUTPUT logs above."
             exit 1
           fi
 
           echo "Extracted RUN_ID: $RUN_ID"
           echo "Extracted EXP_ID: $EXP_ID"
           
-          # Set output untuk digunakan di step berikutnya
+          # Set output
           echo "RUN_ID=$RUN_ID" >> $GITHUB_OUTPUT
           echo "EXP_ID=$EXP_ID" >> $GITHUB_OUTPUT
           
