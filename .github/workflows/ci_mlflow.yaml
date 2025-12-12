@@ -11,65 +11,70 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout repository
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      # 2️⃣ Setup Conda Environment
+      # 1. Setup Environment
       - name: Set up Miniconda
         uses: conda-incubator/setup-miniconda@v2
         with:
           auto-update-conda: true
           python-version: 3.8
           activate-environment: mlflow-ci-env
-
-      # 3️⃣ Update Conda Environment dependencies
-      - name: Update Conda Environment
+          
+      - name: Install ML Project Dependencies
         shell: bash
         run: |
-          echo "Updating Conda environment..."
-          conda env update -f MlProject/conda.yaml
-
-      # 4️⃣ Run MLflow Project
+          # Pastikan Conda environment diupdate dengan dependensi dari conda.yaml
+          conda env update -f MLProject/conda.yaml
+          
+      # 2. Run MLflow Project and Extract IDs (Solusi Ekstraksi Definitif)
       - name: Run MLflow Project and Extract IDs
         shell: bash
         id: run_ml
         run: |
           echo "Starting MLflow training and ID extraction..."
           
-          # Jalankan MLflow dan simpan output (no-color untuk parsing aman)
-          MLFLOW_OUTPUT=$(conda run -n mlflow-ci-env mlflow run ./MlProject \
-            --experiment-name "CI_Training_Run" \
-            --run-name "GH_Actions_Run_$(date +%Y%m%d%H%M%S)" \
-            --no-color || true)
-
-          # Ekstraksi RUN_ID dari output
+          # 2a. Jalankan MLflow Run dan simpan semua output-nya
+          MLFLOW_OUTPUT=$(conda run -n mlflow-ci-env mlflow run ./MLProject --experiment-name "CI_Training_Run" --run-name "GH_Actions_Run_$(date +%Y%m%d%H%M%S)")
+          
+          # Tampilkan output lengkap MLflow (berguna untuk debugging)
+          echo "--- MLFLOW OUTPUT ---"
+          echo "$MLFLOW_OUTPUT"
+          echo "---------------------"
+          
+          # 2b. Ekstraksi RUN_ID
+          # Mengambil RUN ID yang tertera di baris '=== Run (ID '...') succeeded ==='
+          # awk -F "'" memisahkan string berdasarkan tanda kutip tunggal
           RUN_ID=$(echo "$MLFLOW_OUTPUT" | grep 'succeeded' | awk -F "'" '{print $2}' | head -n 1)
           
-          # Ekstraksi EXP_ID dari output
+          # 2c. Ekstraksi Experiment ID (Jika 'CI_Training_Run' baru dibuat)
+          # Mengambil angka terakhir di baris 'Creating a new experiment <ID>'
           EXP_ID=$(echo "$MLFLOW_OUTPUT" | grep 'Creating a new experiment' | awk '{print $NF}' | tr -d '[:punct:]')
-          if [ -z "$EXP_ID" ]; then EXP_ID="0"; fi
-
-          # Jika RUN_ID gagal, tampilkan output lengkap untuk debugging
+          
+          # Jika EXP_ID tidak ditemukan di output (berarti Experiment sudah ada), gunakan ID default (0)
+          if [ -z "$EXP_ID" ]; then
+            EXP_ID="0"
+          fi
+          
           if [ -z "$RUN_ID" ]; then
-            echo "FATAL: Could not extract RUN ID from MLflow output."
-            echo "--- MLFLOW OUTPUT ---"
-            echo "$MLFLOW_OUTPUT"
-            echo "---------------------"
+            echo "FATAL: Could not extract RUN ID after successful training."
             exit 1
           fi
 
           echo "Extracted RUN_ID: $RUN_ID"
           echo "Extracted EXP_ID: $EXP_ID"
-
+          
+          # Set output untuk digunakan di step berikutnya
           echo "RUN_ID=$RUN_ID" >> $GITHUB_OUTPUT
           echo "EXP_ID=$EXP_ID" >> $GITHUB_OUTPUT
-
-      # 5️⃣ Upload artefak MLflow
-      - name: Upload Trained Model Artifacts
+          
+      # 3. Upload Artefak (Memenuhi Kriteria Skilled)
+      - name: Upload Trained Model Artifacts to GitHub Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: trained-mlflow-model
+          # Path artefak sekarang menggunakan EXP_ID dan RUN_ID yang diekstrak: mlruns/EXP_ID/RUN_ID/artifacts/...
           path: mlruns/${{ steps.run_ml.outputs.EXP_ID }}/${{ steps.run_ml.outputs.RUN_ID }}/artifacts/logistic_regression_model/
           retention-days: 7
