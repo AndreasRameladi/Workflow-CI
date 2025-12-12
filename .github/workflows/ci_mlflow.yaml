@@ -22,11 +22,18 @@ jobs:
           python-version: 3.8
           activate-environment: mlflow-ci-env
           
-      - name: Install ML Project Dependencies
+      - name: Install ML Project Dependencies (WITH DEBUGGING)
         shell: bash
         run: |
-          # Perbarui environment menggunakan conda.yaml yang ada di MLProject
+          # --- DEBUGGING LOKASI FILE ---
+          echo "Listing files in working directory ($PWD) for verification:"
+          ls -R
+          echo "--------------------------------------------------------"
+          
+          # Perbarui environment menggunakan conda.yaml
           conda env update -f MLProject/conda.yaml
+          
+          # Aktivasi environment yang sudah diperbarui
           conda activate mlflow-ci-env
 
       # 2. Run MLflow Project
@@ -42,9 +49,9 @@ jobs:
       # 3. Upload Artefak (Memenuhi Kriteria Skilled)
       - name: Upload Trained Model Artifacts to GitHub Artifacts
         if: always()
-        uses: actions/upload-artifact@v4 # <-- SUDAH DIPERBARUI KE V4
+        uses: actions/upload-artifact@v4 # <-- DIPERBAIKI (MENGGANTIKAN v3)
         with:
           name: trained-mlflow-model
-          # Path artefak diambil dari lokasi default MLflow (mlruns/0/RUN_ID/artifacts/model_name)
+          # Path artefak
           path: mlruns/0/${{ steps.run_ml.outputs.RUN_ID }}/artifacts/logistic_regression_model/
           retention-days: 7
