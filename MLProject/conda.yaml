@@ -5,11 +5,11 @@ channels:
 dependencies:
   - python=3.8
   - pip
-  - scikit-learn=1.0.2  # Pastikan versi ini tersedia dan sesuai
+  - scikit-learn=1.0.2
   - pandas=1.4.2
   - mlflow=1.25.1
+  - setuptools=58.2.0  
+  - wheel              
   - pip:
     - numpy
     - scipy
-    - setuptools  
-    - wheel       
