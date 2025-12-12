@@ -12,8 +12,9 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
+      # 1. Setup Environment
       - name: Set up Miniconda
         uses: conda-incubator/setup-miniconda@v2
         with:
@@ -28,24 +29,22 @@ jobs:
           conda env update -f MLProject/conda.yaml
           conda activate mlflow-ci-env
 
-      # Jalankan MLflow Project. MLflow akan menggunakan definisi dari MLProject file.
+      # 2. Run MLflow Project
       - name: Run MLflow Project and Training
         shell: bash
         id: run_ml
         run: |
           conda activate mlflow-ci-env
-          # Simpan Run ID sebagai output untuk digunakan di langkah selanjutnya
+          # Jalankan MLflow Project, dapatkan RUN_ID untuk langkah upload artefak
           RUN_ID=$(mlflow run ./MLProject --experiment-name "CI_Training_Run" --no-conda --run-name "GH_Actions_Run_$(date +%Y%m%d%H%M%S)" | grep 'run_id' | awk '{print $2}')
           echo "RUN_ID=$RUN_ID" >> $GITHUB_OUTPUT
           
-      # --- Langkah Kunci untuk Kriteria Skilled: Menyimpan Artefak ---
-      # Artefak disimpan oleh MLflow di mlruns/0/RUN_ID/artifacts/model_name
+      # 3. Upload Artefak (Memenuhi Kriteria Skilled)
       - name: Upload Trained Model Artifacts to GitHub Artifacts
-        if: always() # Jalankan meskipun langkah training gagal, untuk debugging
-        uses: actions/upload-artifact@v3
+        if: always()
+        uses: actions/upload-artifact@v4 # <-- SUDAH DIPERBARUI KE V4
         with:
           name: trained-mlflow-model
-          # Path ini mengasumsikan MLflow menggunakan Experiment ID 0 secara default,
-          # dan menggunakan RUN_ID dari langkah sebelumnya.
+          # Path artefak diambil dari lokasi default MLflow (mlruns/0/RUN_ID/artifacts/model_name)
           path: mlruns/0/${{ steps.run_ml.outputs.RUN_ID }}/artifacts/logistic_regression_model/
-          retention-days: 7 # Simpan artefak selama 7 hari
+          retention-days: 7
