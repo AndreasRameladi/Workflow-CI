@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch: # Mengizinkan trigger manual
+  workflow_dispatch:
 
 jobs:
   run_mlflow_training:
@@ -22,36 +22,33 @@ jobs:
           python-version: 3.8
           activate-environment: mlflow-ci-env
           
-      - name: Install ML Project Dependencies (WITH DEBUGGING)
+      # 2. Install/Update Dependencies (Mengatasi Error Conda Activate)
+      - name: Install ML Project Dependencies
         shell: bash
         run: |
-          # --- DEBUGGING LOKASI FILE ---
-          echo "Listing files in working directory ($PWD) for verification:"
+          # Perintah 'ls -R' ini bersifat debugging dan bisa dihapus jika semua sudah berjalan
+          echo "Listing files for verification:"
           ls -R
           echo "--------------------------------------------------------"
           
-          # Perbarui environment menggunakan conda.yaml
+          # Update environment tanpa perlu 'conda activate' sebelumnya
           conda env update -f MLProject/conda.yaml
           
-          # Aktivasi environment yang sudah diperbarui
-          conda activate mlflow-ci-env
-
-      # 2. Run MLflow Project
+      # 3. Run MLflow Project (Mengatasi Error Conda Activate)
       - name: Run MLflow Project and Training
         shell: bash
         id: run_ml
+        # Menggunakan 'conda run' untuk menjalankan mlflow di environment yang spesifik.
         run: |
-          conda activate mlflow-ci-env
-          # Jalankan MLflow Project, dapatkan RUN_ID untuk langkah upload artefak
-          RUN_ID=$(mlflow run ./MLProject --experiment-name "CI_Training_Run" --no-conda --run-name "GH_Actions_Run_$(date +%Y%m%d%H%M%S)" | grep 'run_id' | awk '{print $2}')
+          RUN_ID=$(conda run -n mlflow-ci-env mlflow run ./MLProject --experiment-name "CI_Training_Run" --no-conda --run-name "GH_Actions_Run_$(date +%Y%m%d%H%M%S)" | grep 'run_id' | awk '{print $2}')
           echo "RUN_ID=$RUN_ID" >> $GITHUB_OUTPUT
           
-      # 3. Upload Artefak (Memenuhi Kriteria Skilled)
+      # 4. Upload Artefak (Memenuhi Kriteria Skilled)
       - name: Upload Trained Model Artifacts to GitHub Artifacts
         if: always()
-        uses: actions/upload-artifact@v4 # <-- DIPERBAIKI (MENGGANTIKAN v3)
+        uses: actions/upload-artifact@v4 # Sudah diperbaiki dari v3
         with:
           name: trained-mlflow-model
-          # Path artefak
+          # Path artefak diasumsikan di 'mlruns/0/RUN_ID/artifacts/logistic_regression_model/'
           path: mlruns/0/${{ steps.run_ml.outputs.RUN_ID }}/artifacts/logistic_regression_model/
           retention-days: 7
