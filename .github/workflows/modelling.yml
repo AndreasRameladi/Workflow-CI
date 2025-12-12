@@ -1,0 +1,32 @@
+name: Run Modelling
+
+on:
+  push:
+    paths:
+      - "Membangun_model/**"
+      - ".github/workflows/modelling.yml"
+  workflow_dispatch:
+
+jobs:
+  modelling:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          cd Membangun_model
+          pip install -r requirements.txt
+          pip install mlflow
+
+      - name: Run Modelling Script
+        run: |
+          cd Membangun_model
+          python modelling.py
