@@ -35,12 +35,28 @@ jobs:
           conda env update -f MLProject/conda.yaml
           
       # 3. Run MLflow Project (Mengatasi Error Conda Activate)
+      # ...
       - name: Run MLflow Project and Training
         shell: bash
         id: run_ml
-        # Menggunakan 'conda run' untuk menjalankan mlflow di environment yang spesifik.
         run: |
-          RUN_ID=$(conda run -n mlflow-ci-env mlflow run ./MLProject --experiment-name "CI_Training_Run" --no-conda --run-name "GH_Actions_Run_$(date +%Y%m%d%H%M%S)" | grep 'run_id' | awk '{print $2}')
+          # 1. Jalankan MLflow Project
+          conda run -n mlflow-ci-env mlflow run ./MLProject --experiment-name "CI_Training_Run" --no-conda --run-name "GH_Actions_Run_$(date +%Y%m%d%H%M%S)"
+          
+          # 2. EKSTRAKSI RUN_ID SECARA TERPISAH (lebih andal)
+          # Cari run terbaru (LIMIT 1) dari experiment 'CI_Training_Run' dan ambil ID-nya.
+          RUN_ID=$(conda run -n mlflow-ci-env mlflow search runs --experiment-names "CI_Training_Run" \
+                                                                 --order-by "attributes.start_time DESC" \
+                                                                 --max-results 1 \
+                                                                 --output-format json | \
+                       jq -r '.[0].info.run_id')
+          
+          if [ -z "$RUN_ID" ]; then
+            echo "FATAL: Could not retrieve MLflow Run ID."
+            exit 1
+          fi
+
+          echo "Extracted RUN_ID: $RUN_ID"
           echo "RUN_ID=$RUN_ID" >> $GITHUB_OUTPUT
           
       # 4. Upload Artefak (Memenuhi Kriteria Skilled)
