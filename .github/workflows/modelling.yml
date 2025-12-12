@@ -3,14 +3,14 @@ name: Run Modelling
 on:
   push:
     paths:
-      - "modelling.py"
-      - "requirements.txt"
+      - "Workflow-CI/**"
       - ".github/workflows/modelling.yml"
   workflow_dispatch:
 
 jobs:
   modelling:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       # Checkout repository
@@ -23,13 +23,24 @@ jobs:
         with:
           python-version: "3.10"
 
-      # Install dependencies
+      # Install dependencies (dijalankan di Workflow-CI)
       - name: Install dependencies
+        working-directory: Workflow-CI
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install mlflow
 
-      # Run modelling script
+      # Run Modelling Script (dijalankan di Workflow-CI)
       - name: Run Modelling Script
+        working-directory: Workflow-CI
         run: python modelling.py
+
+      # Upload MLflow artifacts
+      - name: Upload MLflow Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: training-results
+          path: |
+            Workflow-CI/mlruns/
+          retention-days: 30
