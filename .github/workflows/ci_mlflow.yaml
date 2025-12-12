@@ -11,51 +11,47 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ Checkout repository
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      # 1. Setup Environment
+      # 2️⃣ Setup Conda Environment
       - name: Set up Miniconda
         uses: conda-incubator/setup-miniconda@v2
         with:
           auto-update-conda: true
           python-version: 3.8
           activate-environment: mlflow-ci-env
-          
-      - name: Install ML Project Dependencies (Update Conda Env)
+
+      # 3️⃣ Install dependencies
+      - name: Update Conda Environment
         shell: bash
         run: |
-          # Pastikan Conda environment diupdate
-          conda env update -f MLProject/conda.yaml
-          
-      # HILANGKAN LANGKAH INSTALASI jq
-      # 2. Run MLflow Project and Training (FINAL FIX)
-      - name: Run MLflow Project and Training
+          conda env update -f MlProject/conda.yaml
+
+      # 4️⃣ Run MLflow Project
+      - name: Run MLflow Project and Extract IDs
         shell: bash
         id: run_ml
         run: |
           echo "Starting MLflow training and ID extraction..."
           
-          # 2a. Jalankan MLflow Run dan simpan output-nya ke variabel
-          # Kita tidak bisa menggunakan `--no-conda` lagi karena output-nya kotor.
-          MLFLOW_OUTPUT=$(conda run -n mlflow-ci-env mlflow run ./MLProject --experiment-name "CI_Training_Run" --run-name "GH_Actions_Run_$(date +%Y%m%d%H%M%S)")
-          
-          # 2b. Ekstraksi Run ID (Menggunakan RUN ID yang sudah sukses dicetak)
-          # Ambil baris yang berisi 'succeeded' dan ekstraksi ID
+          # Jalankan MLflow dan simpan output (no-color untuk parsing aman)
+          MLFLOW_OUTPUT=$(conda run -n mlflow-ci-env mlflow run ./MlProject \
+            --experiment-name "CI_Training_Run" \
+            --run-name "GH_Actions_Run_$(date +%Y%m%d%H%M%S)" \
+            --no-color || true)
+
+          # Ekstraksi RUN_ID dari output
           RUN_ID=$(echo "$MLFLOW_OUTPUT" | grep 'succeeded' | awk -F "'" '{print $2}' | head -n 1)
           
-          # 2c. Ambil Experiment ID dari log MLflow
-          # Cari baris 'Created a new experiment'
+          # Ekstraksi EXP_ID dari output
           EXP_ID=$(echo "$MLFLOW_OUTPUT" | grep 'Creating a new experiment' | awk '{print $NF}' | tr -d '[:punct:]')
-          
-          # Jika EXP_ID gagal, asumsikan 0.
-          if [ -z "$EXP_ID" ]; then
-            EXP_ID="0"
-          fi
-          
+          if [ -z "$EXP_ID" ]; then EXP_ID="0"; fi
+
+          # Jika RUN_ID gagal, tampilkan output lengkap untuk debugging
           if [ -z "$RUN_ID" ]; then
             echo "FATAL: Could not extract RUN ID from MLflow output."
-            # Tampilkan output lengkap MLflow untuk debugging jika gagal
             echo "--- MLFLOW OUTPUT ---"
             echo "$MLFLOW_OUTPUT"
             echo "---------------------"
@@ -64,14 +60,19 @@ jobs:
 
           echo "Extracted RUN_ID: $RUN_ID"
           echo "Extracted EXP_ID: $EXP_ID"
+
           echo "RUN_ID=$RUN_ID" >> $GITHUB_OUTPUT
-          
-      # 3. Upload Artefak
-      - name: Upload Trained Model Artifacts to GitHub Artifacts
+          echo "EXP_ID=$EXP_ID" >> $GITHUB_OUTPUT
+
+      # 5️⃣ Upload artefak MLflow
+      - name: Upload Trained Model Artifacts
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: trained-mlflow-model
-          # Menggunakan RUN_ID yang berhasil diekstrak
-          path: mlruns/${{ steps.run_ml.outputs.EXP_ID }}/${{ steps.run_ml.outputs.RUN_ID }}/artifacts/logistic_regression_model/
-          retention-days: 7
+        shell: bash
+        run: |
+          ART_PATH="mlruns/${{ steps.run_ml.outputs.EXP_ID }}/${{ steps.run_ml.outputs.RUN_ID }}/artifacts/logistic_regression_model/"
+          if [ -d "$ART_PATH" ]; then
+            echo "Uploading artefacts from $ART_PATH"
+            gh-actions-upload-artifact --name trained-mlflow-model --path "$ART_PATH" --retention-days 7
+          else
+            echo "Warning: Artifact path does not exist: $ART_PATH"
+          fi
