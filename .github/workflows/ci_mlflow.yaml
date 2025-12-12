@@ -22,29 +22,29 @@ jobs:
           python-version: 3.8
           activate-environment: mlflow-ci-env
           
-      # 2. Install/Update Dependencies (Mengatasi Error Conda Activate)
-      - name: Install ML Project Dependencies
+      - name: Install ML Project Dependencies (Update Conda Env)
         shell: bash
         run: |
-          # Perintah 'ls -R' ini bersifat debugging dan bisa dihapus jika semua sudah berjalan
-          echo "Listing files for verification:"
-          ls -R
-          echo "--------------------------------------------------------"
-          
-          # Update environment tanpa perlu 'conda activate' sebelumnya
+          # Pastikan Conda environment diupdate dengan dependensi dari conda.yaml
           conda env update -f MLProject/conda.yaml
           
-      # 3. Run MLflow Project (Mengatasi Error Conda Activate)
-      # ...
+      # 2. Instalasi Tool (Memerlukan jq untuk parsing JSON)
+      - name: Install jq for JSON parsing
+        # jq digunakan untuk mengekstrak RUN_ID secara andal dari output JSON MLflow
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      # 3. Run MLflow Project and Training (Mengatasi Kegagalan Ekstraksi RUN_ID)
       - name: Run MLflow Project and Training
         shell: bash
         id: run_ml
         run: |
-          # 1. Jalankan MLflow Project
+          # 3a. Jalankan MLflow Run (Tanpa Piping yang rumit)
+          # Perintah ini memastikan training berjalan dan logging ke mlruns/
           conda run -n mlflow-ci-env mlflow run ./MLProject --experiment-name "CI_Training_Run" --no-conda --run-name "GH_Actions_Run_$(date +%Y%m%d%H%M%S)"
           
-          # 2. EKSTRAKSI RUN_ID SECARA TERPISAH (lebih andal)
-          # Cari run terbaru (LIMIT 1) dari experiment 'CI_Training_Run' dan ambil ID-nya.
+          # 3b. EKSTRAKSI RUN_ID SECARA TERPISAH (Menggunakan search dan jq)
+          echo "Extracting RUN_ID for artifact upload..."
+          # Mencari run terbaru dari experiment yang baru dibuat
           RUN_ID=$(conda run -n mlflow-ci-env mlflow search runs --experiment-names "CI_Training_Run" \
                                                                  --order-by "attributes.start_time DESC" \
                                                                  --max-results 1 \
@@ -52,8 +52,8 @@ jobs:
                        jq -r '.[0].info.run_id')
           
           if [ -z "$RUN_ID" ]; then
-            echo "FATAL: Could not retrieve MLflow Run ID."
-            exit 1
+            echo "FATAL: Could not retrieve MLflow Run ID. Artifact upload will fail."
+            exit 1 # Gagal jika ID tidak ditemukan
           fi
 
           echo "Extracted RUN_ID: $RUN_ID"
@@ -62,9 +62,9 @@ jobs:
       # 4. Upload Artefak (Memenuhi Kriteria Skilled)
       - name: Upload Trained Model Artifacts to GitHub Artifacts
         if: always()
-        uses: actions/upload-artifact@v4 # Sudah diperbaiki dari v3
+        uses: actions/upload-artifact@v4
         with:
           name: trained-mlflow-model
-          # Path artefak diasumsikan di 'mlruns/0/RUN_ID/artifacts/logistic_regression_model/'
+          # Path artefak diambil dari mlruns/0/RUN_ID/artifacts/logistic_regression_model/
           path: mlruns/0/${{ steps.run_ml.outputs.RUN_ID }}/artifacts/logistic_regression_model/
           retention-days: 7
