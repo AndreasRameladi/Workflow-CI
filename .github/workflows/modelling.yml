@@ -13,25 +13,24 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      # Checkout repository
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # Menggunakan versi terbaru
 
-      # Set up Python
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5 # Menggunakan versi terbaru
         with:
           python-version: "3.10"
 
-      # Install dependencies (dijalankan di MIProject)
+      # Install dependencies menggunakan working-directory
       - name: Install dependencies
         working-directory: MIProject
         run: |
+          echo "Mengupgrade pip dan menginstal dependensi..."
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install mlflow
+          pip install mlflow # Instalasi eksplisit untuk memastikan
 
-      # Run Modelling Script (dijalankan di MIProject)
+      # Run Modelling Script menggunakan working-directory
       - name: Run Modelling Script
         working-directory: MIProject
         run: python modelling.py
@@ -41,5 +40,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: training-results
-          path: MIProject/mlruns/
+          path: MIProject/mlruns/ # Path relatif dari root repo
           retention-days: 30
