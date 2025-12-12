@@ -41,5 +41,5 @@ jobs:
         name: training-results
         path: |
           Workflow-CI/mlruns/
-          Workflow-CI/math_preprocessing/student-mat_preprocessed.csv
+          Ww\orkflow-CI/math_preprocessing/student-mat_preprocessed.csv
         retention-days: 30
