@@ -29,35 +29,49 @@ jobs:
           conda env update -f MLProject/conda.yaml
           
       # HILANGKAN LANGKAH INSTALASI jq
-          
-      # 2. Run MLflow Project and Training (EKSTRAKSI RUN_ID MENGGUNAKAN LS)
+      # 2. Run MLflow Project and Training (FINAL FIX)
       - name: Run MLflow Project and Training
         shell: bash
         id: run_ml
         run: |
-          echo "Starting MLflow training..."
+          echo "Starting MLflow training and ID extraction..."
           
-          # 2a. Jalankan MLflow Run
-          conda run -n mlflow-ci-env mlflow run ./MLProject --experiment-name "CI_Training_Run" --no-conda --run-name "GH_Actions_Run_$(date +%Y%m%d%H%M%S)"
+          # 2a. Jalankan MLflow Run dan simpan output-nya ke variabel
+          # Kita tidak bisa menggunakan `--no-conda` lagi karena output-nya kotor.
+          MLFLOW_OUTPUT=$(conda run -n mlflow-ci-env mlflow run ./MLProject --experiment-name "CI_Training_Run" --run-name "GH_Actions_Run_$(date +%Y%m%d%H%M%S)")
           
-          # 2b. EKSTRAKSI RUN_ID MENGGUNAKAN LS (Mencari folder run terbaru)
-          # Mengambil nama folder (RUN_ID) terbaru di dalam mlruns/0/
-          RUN_ID=$(ls -t mlruns/0 | head -n 1) 
+          # 2b. Ekstraksi Run ID (Menggunakan RUN ID yang sudah sukses dicetak)
+          # Ambil baris yang berisi 'succeeded' dan ekstraksi ID
+          RUN_ID=$(echo "$MLFLOW_OUTPUT" | grep 'succeeded' | awk -F "'" '{print $2}' | head -n 1)
           
-          if [ -z "$RUN_ID" ] || [ ! -d "mlruns/0/$RUN_ID" ]; then
-            echo "FATAL: Could not retrieve MLflow Run ID from mlruns/0/."
+          # 2c. Ambil Experiment ID dari log MLflow
+          # Cari baris 'Created a new experiment'
+          EXP_ID=$(echo "$MLFLOW_OUTPUT" | grep 'Creating a new experiment' | awk '{print $NF}' | tr -d '[:punct:]')
+          
+          # Jika EXP_ID gagal, asumsikan 0.
+          if [ -z "$EXP_ID" ]; then
+            EXP_ID="0"
+          fi
+          
+          if [ -z "$RUN_ID" ]; then
+            echo "FATAL: Could not extract RUN ID from MLflow output."
+            # Tampilkan output lengkap MLflow untuk debugging jika gagal
+            echo "--- MLFLOW OUTPUT ---"
+            echo "$MLFLOW_OUTPUT"
+            echo "---------------------"
             exit 1
           fi
 
           echo "Extracted RUN_ID: $RUN_ID"
+          echo "Extracted EXP_ID: $EXP_ID"
           echo "RUN_ID=$RUN_ID" >> $GITHUB_OUTPUT
           
-      # 3. Upload Artefak (Memenuhi Kriteria Skilled)
+      # 3. Upload Artefak
       - name: Upload Trained Model Artifacts to GitHub Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: trained-mlflow-model
-          # Path artefak: mlruns/0/RUN_ID/artifacts/logistic_regression_model/
-          path: mlruns/0/${{ steps.run_ml.outputs.RUN_ID }}/artifacts/logistic_regression_model/
+          # Menggunakan RUN_ID yang berhasil diekstrak
+          path: mlruns/${{ steps.run_ml.outputs.EXP_ID }}/${{ steps.run_ml.outputs.RUN_ID }}/artifacts/logistic_regression_model/
           retention-days: 7
