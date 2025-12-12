@@ -32,7 +32,7 @@ jobs:
 
     - name: Run Modelling (Student Performance Dataset)
       run: |
-        cd Workflows-CI
+        cd Workflow-CI
         python modelling.py
 
     - name: Upload MLflow Artifacts
@@ -40,6 +40,6 @@ jobs:
       with:
         name: training-results
         path: |
-          Workflows-CI/mlruns/
-          Workflows-CI/math_preprocessing/student-mat_preprocessed.csv
+          Workflow-CI/mlruns/
+          Workflow-CI/math_preprocessing/student-mat_preprocessed.csv
         retention-days: 30

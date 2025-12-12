@@ -3,7 +3,7 @@ name: Run Modelling
 on:
   push:
     paths:
-      - "Workflows-CI/**"
+      - "Workflow-CI/**"
       - ".github/workflows/modelling.yml"
   workflow_dispatch:
 
@@ -22,11 +22,11 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd Workflows-CI
+          cd Workflow-CI
           pip install -r requirements.txt
           pip install mlflow
 
       - name: Run Modelling Script
         run: |
-          cd Workflows-CI
+          cd Workflow-CI
           python modelling.py
