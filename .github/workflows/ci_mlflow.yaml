@@ -23,10 +23,11 @@ jobs:
           python-version: 3.8
           activate-environment: mlflow-ci-env
 
-      # 3️⃣ Install dependencies
+      # 3️⃣ Update Conda Environment dependencies
       - name: Update Conda Environment
         shell: bash
         run: |
+          echo "Updating Conda environment..."
           conda env update -f MlProject/conda.yaml
 
       # 4️⃣ Run MLflow Project
@@ -67,12 +68,8 @@ jobs:
       # 5️⃣ Upload artefak MLflow
       - name: Upload Trained Model Artifacts
         if: always()
-        shell: bash
-        run: |
-          ART_PATH="mlruns/${{ steps.run_ml.outputs.EXP_ID }}/${{ steps.run_ml.outputs.RUN_ID }}/artifacts/logistic_regression_model/"
-          if [ -d "$ART_PATH" ]; then
-            echo "Uploading artefacts from $ART_PATH"
-            gh-actions-upload-artifact --name trained-mlflow-model --path "$ART_PATH" --retention-days 7
-          else
-            echo "Warning: Artifact path does not exist: $ART_PATH"
-          fi
+        uses: actions/upload-artifact@v4
+        with:
+          name: trained-mlflow-model
+          path: mlruns/${{ steps.run_ml.outputs.EXP_ID }}/${{ steps.run_ml.outputs.RUN_ID }}/artifacts/logistic_regression_model/
+          retention-days: 7
