@@ -3,7 +3,7 @@ name: CI Workflow for ML Project Training
 on:
   push:
     branches:
-      - main
+      - main    # GANTI KE 'master' JIKA BRANCH ANDA BERNAMA MASTER
   workflow_dispatch:
 
 jobs:
@@ -25,56 +25,43 @@ jobs:
       - name: Install ML Project Dependencies
         shell: bash
         run: |
-          # Pastikan Conda environment diupdate dengan dependensi dari conda.yaml
           conda env update -f MLProject/conda.yaml
           
-      # 2. Run MLflow Project and Extract IDs (Solusi Ekstraksi Definitif)
+      # 2. Run MLflow Project and Extract IDs
       - name: Run MLflow Project and Extract IDs
         shell: bash
         id: run_ml
         run: |
           echo "Starting MLflow training and ID extraction..."
           
-          # 2a. Jalankan MLflow Run dan simpan semua output-nya
-          MLFLOW_OUTPUT=$(conda run -n mlflow-ci-env mlflow run ./MLProject --experiment-name "CI_Training_Run" --run-name "GH_Actions_Run_$(date +%Y%m%d%H%M%S)")
+          # Jalankan MLflow Run & Tangkap Output (stderr digabung ke stdout)
+          MLFLOW_OUTPUT=$(conda run -n mlflow-ci-env mlflow run ./MLProject --experiment-name "CI_Training_Run" --run-name "GH_Actions_Run_$(date +%Y%m%d%H%M%S)" 2>&1)
           
-          # Tampilkan output lengkap MLflow (berguna untuk debugging)
-          echo "--- MLFLOW OUTPUT ---"
+          echo "--- MLFLOW OUTPUT START ---"
           echo "$MLFLOW_OUTPUT"
-          echo "---------------------"
+          echo "--- MLFLOW OUTPUT END ---"
           
-          # 2b. Ekstraksi RUN_ID
-          # Mengambil RUN ID yang tertera di baris '=== Run (ID '...') succeeded ==='
-          # awk -F "'" memisahkan string berdasarkan tanda kutip tunggal
-          RUN_ID=$(echo "$MLFLOW_OUTPUT" | grep 'succeeded' | awk -F "'" '{print $2}' | head -n 1)
+          # Ekstraksi ID dengan fallback '|| true' agar tidak error
+          RUN_ID=$(echo "$MLFLOW_OUTPUT" | grep 'succeeded' | awk -F "'" '{print $2}' | head -n 1 || true)
+          EXP_ID=$(echo "$MLFLOW_OUTPUT" | grep 'Creating a new experiment' | awk '{print $NF}' | tr -d '[:punct:]' || true)
           
-          # 2c. Ekstraksi Experiment ID (Jika 'CI_Training_Run' baru dibuat)
-          # Mengambil angka terakhir di baris 'Creating a new experiment <ID>'
-          EXP_ID=$(echo "$MLFLOW_OUTPUT" | grep 'Creating a new experiment' | awk '{print $NF}' | tr -d '[:punct:]')
-          
-          # Jika EXP_ID tidak ditemukan di output (berarti Experiment sudah ada), gunakan ID default (0)
           if [ -z "$EXP_ID" ]; then
             EXP_ID="0"
           fi
           
           if [ -z "$RUN_ID" ]; then
-            echo "FATAL: Could not extract RUN ID after successful training."
+            echo "FATAL: Could not extract RUN ID."
             exit 1
           fi
 
-          echo "Extracted RUN_ID: $RUN_ID"
-          echo "Extracted EXP_ID: $EXP_ID"
-          
-          # Set output untuk digunakan di step berikutnya
           echo "RUN_ID=$RUN_ID" >> $GITHUB_OUTPUT
           echo "EXP_ID=$EXP_ID" >> $GITHUB_OUTPUT
           
-      # 3. Upload Artefak (Memenuhi Kriteria Skilled)
-      - name: Upload Trained Model Artifacts to GitHub Artifacts
+      # 3. Upload Artefak
+      - name: Upload Trained Model Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: trained-mlflow-model
-          # Path artefak sekarang menggunakan EXP_ID dan RUN_ID yang diekstrak: mlruns/EXP_ID/RUN_ID/artifacts/...
           path: mlruns/${{ steps.run_ml.outputs.EXP_ID }}/${{ steps.run_ml.outputs.RUN_ID }}/artifacts/logistic_regression_model/
           retention-days: 7
