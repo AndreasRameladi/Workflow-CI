@@ -1,0 +1,13 @@
+name: mlflow-ci-env
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.8
+  - pip
+  - scikit-learn=1.0.2  # Pastikan versi yang kompatibel
+  - pandas=1.4.2
+  - mlflow=1.25.1
+  - pip:
+    - numpy
+    - scipy

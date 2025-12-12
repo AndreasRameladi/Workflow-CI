@@ -1,5 +1,10 @@
-name: student_performance_mlproject
+name: Student-Performance-CI
 
+# Definisikan environment Conda
+conda_env: conda.yaml
+
+# Definisikan entry point
 entry_points:
-  train:
+  main:
     command: "python modelling.py"
+    # Tidak menggunakan parameter di contoh ini, tapi bisa ditambahkan di sini.

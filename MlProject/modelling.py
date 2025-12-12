@@ -1,63 +1,50 @@
-import os
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
 import mlflow
 import mlflow.sklearn
-import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
+import os
 
-# -----------------------------
-# CONFIG DATASET & MLflow
-# -----------------------------
-LOCAL_CSV_PATH = r"C:\Users\Andreas Rameladi\Downloads\proyekakhir5\Membangun_model\math_preprocessing\student-mat_preprocessed.csv"
+# Definisikan path data relatif terhadap root MLProject
+DATA_PATH = os.path.join("..", "math_preprocessing", "student-mat_preprocessed.csv")
+MODEL_NAME = "logistic_regression_model"
 
-# MLflow tracking lokal
-MLFLOW_TRACKING_URI = r"file:///C:/Users/Andreas Rameladi/Downloads/proyekakhir5/Membangun_model/mlruns"
-mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+if __name__ == "__main__":
+    # Inisiasi MLflow run
+    with mlflow.start_run():
+        print("Starting training...")
+        
+        # 1. Muat Data
+        try:
+            df = pd.read_csv(DATA_PATH)
+        except FileNotFoundError:
+            print(f"Error: Data file not found at {DATA_PATH}")
+            exit()
 
-# Nama eksperimen
-EXPERIMENT_NAME = "Student_Performance_RF"
-mlflow.set_experiment(EXPERIMENT_NAME)
+        # 2. Persiapan Data (Asumsi: 'G3' adalah target)
+        X = df.drop('G3', axis=1)
+        y = (df['G3'] > 10).astype(int) # Contoh klasifikasi biner (lulus/tidak lulus)
+        
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# -----------------------------
-# LOAD DATA
-# -----------------------------
-if not os.path.exists(LOCAL_CSV_PATH):
-    print("[ERROR] File dataset tidak ditemukan!")
-    exit()
+        # 3. Latih Model
+        model = LogisticRegression(solver='liblinear', random_state=42)
+        model.fit(X_train, y_train)
 
-data = pd.read_csv(LOCAL_CSV_PATH)
-print("[INFO] Dataset loaded. Columns:", data.columns.tolist())
+        # 4. Evaluasi Model
+        y_pred = model.predict(X_test)
+        accuracy = accuracy_score(y_test, y_pred)
+        
+        print(f"Model Accuracy: {accuracy}")
 
-# Pisahkan fitur dan target
-X = pd.get_dummies(data.drop("G3", axis=1)).astype(float)  # Semua fitur ke float
-y = data["G3"].astype(float)  # Target numerik
+        # 5. Log Parameter dan Metrik ke MLflow
+        mlflow.log_param("test_split", 0.2)
+        mlflow.log_param("model_type", "Logistic Regression")
+        mlflow.log_metric("accuracy", accuracy)
 
-# Split train/test
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42
-)
-
-# -----------------------------
-# TRAIN MODEL & LOG KE MLflow
-# -----------------------------
-with mlflow.start_run(run_name="RF_Student_Baseline"):
-    model = RandomForestClassifier(
-        n_estimators=100,
-        max_depth=10,
-        random_state=42
-    )
-    model.fit(X_train, y_train)
-
-    # Evaluasi sederhana
-    acc = model.score(X_test, y_test)
-
-    # Log parameter & metric
-    mlflow.log_param("n_estimators", 100)
-    mlflow.log_param("max_depth", 10)
-    mlflow.log_metric("accuracy", acc)
-
-    # Log model
-    mlflow.sklearn.log_model(model, "model_random_forest")
-
-print("[INFO] Model training selesai. Akurasi:", acc)
-print("[INFO] Cek MLflow UI untuk melihat metrics dan artifact model.")
+        # 6. Simpan Model ke MLflow (Ini menghasilkan artefak)
+        # MLflow secara otomatis menyimpan model di direktori 'mlruns/run_id/artifacts/model'
+        mlflow.sklearn.log_model(model, MODEL_NAME)
+        print(f"Model logged to MLflow as artifact: {MODEL_NAME}")
